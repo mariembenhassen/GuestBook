@@ -1,26 +1,51 @@
-# Use official PHP 8.5 image with Apache
+# Use official PHP 8.5 Apache image
 FROM php:8.5-apache
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Install required PHP extensions
-RUN docker-php-ext-install pdo pdo_sqlite
+# Install system dependencies + build tools
+RUN apt-get update && apt-get install -y \
+        libsqlite3-dev \
+        pkg-config \
+        libzip-dev \
+        unzip \
+        libxml2-dev \
+        libxslt1-dev \
+        git \
+        librabbitmq-dev \
+        libssl-dev \
+        libssh-dev \
+        zlib1g-dev \
+    && docker-php-ext-install -j$(nproc) \
+        pdo_sqlite \
+        xsl \
+        zip \
+    && pecl install amqp \
+    && docker-php-ext-enable amqp \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
-# Enable Apache rewrite module (needed for Symfony routing)
+# Enable Apache modules needed for Symfony
 RUN a2enmod rewrite
 
 # Copy project files
 COPY . .
 
+# Configure Git safe directory (useful inside container)
+RUN git config --global --add safe.directory /var/www/html
+
 # Install Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Install PHP dependencies
-RUN composer install --no-dev --optimize-autoloader
+# Install Composer dependencies (no dev packages for production-like build)
+RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 
-# Expose port 80
+# Clear Symfony cache in production
+RUN php bin/console cache:clear --env=prod --no-warmup || true
+
+# Expose port
 EXPOSE 80
 
-# Start Apache in the foreground
+# Start Apache
 CMD ["apache2-foreground"]
