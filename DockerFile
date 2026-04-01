@@ -44,6 +44,15 @@ RUN COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader -
 # Clear Symfony cache in production
 RUN php bin/console cache:clear --env=prod --no-warmup || true
 
+# ==================== CRITICAL PART FOR RENDER ====================
+# Tell Apache the correct document root is /public
+ENV APACHE_DOCUMENT_ROOT /var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# Allow .htaccess overrides in the public folder
+RUN sed -ri -e 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+
 # Expose port
 EXPOSE 80
 
